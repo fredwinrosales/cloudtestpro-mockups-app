@@ -2,8 +2,18 @@ import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-route
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 
+
+function generateContextId() {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  const randomString = (length) =>
+    Array.from({ length }, () => characters.charAt(Math.floor(Math.random() * characters.length))).join('');
+  const timestampPart = Date.now().toString(36); // Base36 compacta
+  const randomPart = randomString(4);
+  return `api-${timestampPart}-${randomPart}`;
+}
+
 export default function App() {
-  const [userId] = useState('user123');
+  const [contextId, setContextId] = useState('');
   const [method, setMethod] = useState('GET');
   const [path, setPath] = useState('');
   const [headers, setHeaders] = useState('{}');
@@ -12,8 +22,16 @@ export default function App() {
   const [mocks, setMocks] = useState([]);
   const [headersError, setHeadersError] = useState('');
   const [bodyError, setBodyError] = useState('');
+  const [notification, setNotification] = useState({ type: '', message: '' });
 
   useEffect(() => {
+    let storedContextId = localStorage.getItem('contextId');
+    if (!storedContextId) {
+      storedContextId = generateContextId();
+      localStorage.setItem('contextId', storedContextId);
+    }
+    setContextId(storedContextId);
+
     const savedMocks = JSON.parse(localStorage.getItem('mocks') || '[]');
     setMocks(savedMocks);
   }, []);
@@ -44,8 +62,8 @@ export default function App() {
     try {
       JSON.parse(headers);
     } catch (error) {
-      setHeadersError('Headers mal formados.');
-      alert('❌ Los headers no son un JSON válido.');
+      setNotification({ type: 'error', message: 'Los headers no son un JSON válido.' });
+      setTimeout(() => setNotification({ type: '', message: '' }), 3000);
       return;
     }
 
@@ -53,13 +71,13 @@ export default function App() {
       try {
         JSON.parse(body);
       } catch (error) {
-        setBodyError('Body mal formado.');
-        alert('❌ El body no es un JSON válido.');
+        setNotification({ type: 'error', message: 'El body no es un JSON válido.' });
+        setTimeout(() => setNotification({ type: '', message: '' }), 3000);
         return;
       }
     }
 
-    const fullPath = `/api-mock/${userId}${path.startsWith('/') ? path : '/' + path}`;
+    const fullPath = `/${contextId}${path.startsWith('/') ? path : '/' + path}`;
 
     const newMock = {
       id: Date.now(),
@@ -78,7 +96,8 @@ export default function App() {
     setAddBody(false);
     setHeadersError('');
     setBodyError('');
-    alert('✅ Mock guardado exitosamente');
+    setNotification({ type: 'success', message: 'Mock guardado exitosamente.' });
+    setTimeout(() => setNotification({ type: '', message: '' }), 3000);
   };
 
   return (
@@ -86,11 +105,18 @@ export default function App() {
       <div className="relative min-h-screen overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-blue-100 via-purple-100 to-pink-100 opacity-70 -z-10"></div>
 
+        {notification.message && (
+          <div className={`fixed top-5 right-5 z-50 p-4 rounded-lg text-white shadow-lg transition-all duration-300
+            ${notification.type === 'success' ? 'bg-green-500' : 'bg-red-500'}`}>
+            {notification.message}
+          </div>
+        )}
+
         <main className="p-10">
           <Routes>
             <Route path="/" element={
               <CreateMockForm 
-                userId={userId}
+                contextId={contextId}
                 method={method} setMethod={setMethod}
                 path={path} setPath={setPath}
                 headers={headers} setHeaders={setHeaders}
@@ -119,7 +145,7 @@ export default function App() {
   );
 }
 
-function CreateMockForm({ userId, method, setMethod, path, setPath, headers, setHeaders, body, setBody, addBody, setAddBody, saveMock, mocks, setMocks, formatHeaders, formatBody, headersError, bodyError }) {
+function CreateMockForm({ contextId, method, setMethod, path, setPath, headers, setHeaders, body, setBody, addBody, setAddBody, saveMock, mocks, setMocks, formatHeaders, formatBody, headersError, bodyError }) {
   const navigate = useNavigate();
 
   const deleteMock = (id) => {
@@ -152,7 +178,7 @@ function CreateMockForm({ userId, method, setMethod, path, setPath, headers, set
           <label className="font-semibold text-gray-700 mb-1">Contexto de API (fijo):</label>
           <input
             type="text"
-            value={`/api-mock/${userId}`}
+            value={`/${contextId}`}
             disabled
             className="p-3 rounded-lg border bg-gray-100 text-gray-500"
           />
@@ -308,7 +334,6 @@ function MockResponse({ mock }) {
       <h1 className="text-3xl font-bold mb-6 text-purple-700">Detalle del Mock</h1>
 
       <div className="w-full max-w-4xl bg-white p-8 rounded-2xl shadow space-y-6">
-
         {/* URL completa */}
         <div>
           <h3 className="font-semibold text-gray-700">URL completa:</h3>

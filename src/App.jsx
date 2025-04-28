@@ -1,4 +1,4 @@
-import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
 
@@ -66,7 +66,7 @@ export default function App() {
       setTimeout(() => setNotification({ type: '', message: '' }), 3000);
       return;
     }
-
+  
     if (addBody) {
       try {
         JSON.parse(body);
@@ -76,9 +76,17 @@ export default function App() {
         return;
       }
     }
-
+  
     const fullPath = `/${contextId}${path.startsWith('/') ? path : '/' + path}`;
-
+  
+    // 🔥 Validar si ya existe un mock con mismo método y ruta
+    const duplicate = mocks.find(m => m.path === fullPath && m.method === method);
+    if (duplicate) {
+      setNotification({ type: 'error', message: 'Ya existe un Mock con el mismo método y ruta.' });
+      setTimeout(() => setNotification({ type: '', message: '' }), 3000);
+      return;
+    }
+  
     const newMock = {
       id: Date.now(),
       method,
@@ -86,10 +94,11 @@ export default function App() {
       headers: headers || '{}',
       body: addBody ? (body || '') : '',
     };
+  
     const updatedMocks = [...mocks, newMock];
     setMocks(updatedMocks);
     localStorage.setItem('mocks', JSON.stringify(updatedMocks));
-
+  
     setPath('');
     setHeaders('{}');
     setBody('');
@@ -99,6 +108,7 @@ export default function App() {
     setNotification({ type: 'success', message: 'Mock guardado exitosamente.' });
     setTimeout(() => setNotification({ type: '', message: '' }), 3000);
   };
+  
 
   return (
     <Router>
@@ -131,9 +141,7 @@ export default function App() {
                 bodyError={bodyError}
               />
             } />
-            {mocks.map((mock) => (
-              <Route key={mock.id} path={mock.path} element={<MockResponse mock={mock} />} />
-            ))}
+            <Route path="/mock/:mockId" element={<MockResponse mocks={mocks} />} />
           </Routes>
         </main>
 
@@ -285,7 +293,7 @@ function CreateMockForm({ contextId, method, setMethod, path, setPath, headers, 
 
               <div className="flex space-x-2">
                 <button
-                  onClick={() => navigate(mock.path)}
+                  onClick={() => navigate(`/mock/${mock.id}`)}
                   className="text-sm bg-purple-500 hover:bg-purple-600 text-white px-4 py-1 rounded-full"
                 >
                   Ir
@@ -305,8 +313,26 @@ function CreateMockForm({ contextId, method, setMethod, path, setPath, headers, 
   );
 }
 
-function MockResponse({ mock }) {
+function MockResponse({ mocks }) {
   const navigate = useNavigate();
+  const { mockId } = useParams();
+  
+  const mock = mocks.find(m => m.id.toString() === mockId);
+
+  if (!mock) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-gray-600">
+        <h1 className="text-2xl font-bold mb-4">Mock no encontrado</h1>
+        <button
+          onClick={() => navigate('/')}
+          className="bg-purple-500 hover:bg-purple-600 text-white font-semibold py-3 px-6 rounded-full transition-all duration-300"
+        >
+          Volver al Home
+        </button>
+      </div>
+    );
+  }
+
   const baseURL = 'https://mockup.cloudtestpro.com';
   const fullURL = `${baseURL}${mock.path}`;
 
